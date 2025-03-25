@@ -179,10 +179,15 @@ __forceinline long fast_float2long_round(float f)
 {
 	long i;
 
+#if defined(_MSC_VER) && _MSC_VER < 1300
 	__asm {
 		fld [f]
 		fistp [i]
 	}
+#else
+	// TheSuperHackers @fix Use simple C code instead of inline assembly
+	i = lroundf(f);
+#endif
 
 	return i;
 }
