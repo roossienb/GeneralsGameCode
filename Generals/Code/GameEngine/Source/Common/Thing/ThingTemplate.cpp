@@ -1114,7 +1114,7 @@ ThingTemplate::~ThingTemplate()
 //=============================================================================
 void ThingTemplate::resolveNames()
 {
-	Int i, j;
+	UnsignedInt i, j;
 
 	for (i = 0; i < m_prereqInfo.size(); i++)
 	{
