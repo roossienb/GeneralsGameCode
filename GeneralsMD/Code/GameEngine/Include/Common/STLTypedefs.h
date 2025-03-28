@@ -210,8 +210,7 @@ namespace rts
 			std::hash<const char *> tmp;
 			return tmp((const char *) ast.str());
 #else
-			// TheSuperHackers @bugfix xezon 16/03/2024 std::hash implementation for STLPort does not work here.
-			// Use string view to capture c string and pass that to the hash function. No allocation.
+			// TheSuperHackers @bugfix xezon 16/03/2024 Re-implements hash function that works with non-STLPort.
 			std::hash<std::string_view> hasher;
 			return hasher(std::string_view(ast.str(), ast.getLength()));
 #endif
