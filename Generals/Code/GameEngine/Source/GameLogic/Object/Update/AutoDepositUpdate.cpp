@@ -131,7 +131,7 @@ UpdateSleepTime AutoDepositUpdate::update( void )
 			return UPDATE_SLEEP_NONE;
 
 		// makes sure that buildings under construction do not get a bonus CCB
-		if( getObject()->getConstructionPercent() != CONSTRUCTION_COMPLETE )
+		if( getObject()->getConstructionPercent() != static_cast<Real>(CONSTRUCTION_COMPLETE) )
 			return UPDATE_SLEEP_NONE;
 		
 		getObject()->getControllingPlayer()->getMoney()->deposit( getAutoDepositUpdateModuleData()->m_depositAmount);

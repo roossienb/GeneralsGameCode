@@ -465,7 +465,7 @@ void ControlBarScheme::init(void)
 			y = m_chatUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_chatLR.x - m_chatUL.x)*resMultiplier.x + COMMAND_BAR_SIZE_OFFSET,(m_chatLR.y - m_chatUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_chatLR.x - m_chatUL.x)*resMultiplier.x + static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_chatLR.y - m_chatUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonIdleWorker" ) );
 	if(win)	
@@ -491,7 +491,7 @@ void ControlBarScheme::init(void)
 		}
 		win->winSetPosition(x,y );
 		
-		win->winSetSize((m_workerLR.x - m_workerUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_workerLR.y - m_workerUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_workerLR.x - m_workerUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_workerLR.y - m_workerUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 
 	}
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ExpBarForeground" ) );
@@ -521,7 +521,7 @@ void ControlBarScheme::init(void)
 			y = m_optionsUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_optionsLR.x - m_optionsUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_optionsLR.y - m_optionsUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_optionsLR.x - m_optionsUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_optionsLR.y - m_optionsUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonPlaceBeacon" ) );
 	if(win)	
@@ -546,7 +546,7 @@ void ControlBarScheme::init(void)
 			y = m_beaconUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_beaconLR.x - m_beaconUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_beaconLR.y - m_beaconUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_beaconLR.x - m_beaconUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_beaconLR.y - m_beaconUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 	
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:MoneyDisplay" ) );
@@ -568,7 +568,7 @@ void ControlBarScheme::init(void)
 			y = m_moneyUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_moneyLR.x - m_moneyUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_moneyLR.y - m_moneyUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_moneyLR.x - m_moneyUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_moneyLR.y - m_moneyUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:PowerWindow" ) );
@@ -590,8 +590,8 @@ void ControlBarScheme::init(void)
 			y = m_powerBarUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_powerBarLR.x - m_powerBarUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_powerBarLR.y - m_powerBarUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
-		DEBUG_LOG(("Power Bar UL X:%d Y:%d LR X:%d Y:%d size X:%d Y:%d\n",m_powerBarUL.x, m_powerBarUL.y,m_powerBarLR.x, m_powerBarLR.y, (m_powerBarLR.x - m_powerBarUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_powerBarLR.y - m_powerBarUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET  ));
+		win->winSetSize((m_powerBarLR.x - m_powerBarUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_powerBarLR.y - m_powerBarUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
+		DEBUG_LOG(("Power Bar UL X:%d Y:%d LR X:%d Y:%d size X:%d Y:%d\n",m_powerBarUL.x, m_powerBarUL.y,m_powerBarLR.x, m_powerBarLR.y, (m_powerBarLR.x - m_powerBarUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_powerBarLR.y - m_powerBarUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET  ));
 	}	
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonGeneral" ) );
@@ -618,7 +618,7 @@ void ControlBarScheme::init(void)
 			y = m_generalUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_generalLR.x - m_generalUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_generalLR.y - m_generalUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_generalLR.x - m_generalUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_generalLR.y - m_generalUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 	
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonLarge" ) );
@@ -644,7 +644,7 @@ void ControlBarScheme::init(void)
 			y = m_minMaxUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_minMaxLR.x - m_minMaxUL.x)*resMultiplier.x + COMMAND_BAR_SIZE_OFFSET,(m_minMaxLR.y - m_minMaxUL.y)*resMultiplier.y + COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_minMaxLR.x - m_minMaxUL.x)*resMultiplier.x + static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_minMaxLR.y - m_minMaxUL.y)*resMultiplier.y + static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 	
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:WinUAttack" ) );
@@ -668,7 +668,7 @@ void ControlBarScheme::init(void)
 			y = m_uAttackUL.y * resMultiplier.y;
 		}
 		win->winSetPosition(x,y );
-		win->winSetSize((m_uAttackLR.x - m_uAttackUL.x)*resMultiplier.x+ COMMAND_BAR_SIZE_OFFSET,(m_uAttackLR.y - m_uAttackUL.y)*resMultiplier.y+ COMMAND_BAR_SIZE_OFFSET);
+		win->winSetSize((m_uAttackLR.x - m_uAttackUL.x)*resMultiplier.x+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET),(m_uAttackLR.y - m_uAttackUL.y)*resMultiplier.y+ static_cast<Real>(COMMAND_BAR_SIZE_OFFSET));
 	}
 }
 

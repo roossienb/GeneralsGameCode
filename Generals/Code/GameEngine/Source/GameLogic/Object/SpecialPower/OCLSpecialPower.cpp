@@ -176,7 +176,7 @@ void OCLSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, UnsignedInt 
 			break;
 		case CREATE_AT_EDGE_FARTHEST_FROM_TARGET:
 			creationCoord = TheTerrainLogic->findFarthestEdgePoint(loc);
-			creationCoord.z += CREATE_ABOVE_LOCATION_HEIGHT;
+			creationCoord.z += static_cast<Real>(CREATE_ABOVE_LOCATION_HEIGHT);
 			ObjectCreationList::create( ocl, getObject(), &creationCoord, loc );
 			break;
 		case CREATE_AT_LOCATION:
@@ -191,7 +191,7 @@ void OCLSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, UnsignedInt 
 		case CREATE_ABOVE_LOCATION:
 			// this is the case where the special power stuff originates above the location of the mouse click
 			creationCoord = *loc;
-			creationCoord.z += CREATE_ABOVE_LOCATION_HEIGHT;
+			creationCoord.z += static_cast<Real>(CREATE_ABOVE_LOCATION_HEIGHT);
 			ObjectCreationList::create( ocl, getObject(), &creationCoord, loc );
 			break;
 	}
