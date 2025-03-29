@@ -2361,19 +2361,19 @@ Bool LayoutScheme::loadScheme( char *filename )
 	}  // end if
 
 	// default text colors
-	fscanf( fp, "Enabled Text: (%d,%d,%d,%d)\n", &colorR, &colorG, &colorB, &colorA );
+	fscanf( fp, "Enabled Text: (%hhu,%hhu,%hhu,%hhu)\n", &colorR, &colorG, &colorB, &colorA );
 	m_enabledText.color = GameMakeColor( colorR, colorG, colorB, colorA );
-	fscanf( fp, "Enabled Text Border: (%d,%d,%d,%d)\n", &colorR, &colorG, &colorB, &colorA );
+	fscanf( fp, "Enabled Text Border: (%hhu,%hhu,%hhu,%hhu)\n", &colorR, &colorG, &colorB, &colorA );
 	m_enabledText.borderColor = GameMakeColor( colorR, colorG, colorB, colorA );
 
-	fscanf( fp, "Disabled Text: (%d,%d,%d,%d)\n", &colorR, &colorG, &colorB, &colorA );
+	fscanf( fp, "Disabled Text: (%hhu,%hhu,%hhu,%hhu)\n", &colorR, &colorG, &colorB, &colorA );
 	m_disabledText.color = GameMakeColor( colorR, colorG, colorB, colorA );
-	fscanf( fp, "Disabled Text Border: (%d,%d,%d,%d)\n", &colorR, &colorG, &colorB, &colorA );
+	fscanf( fp, "Disabled Text Border: (%hhu,%hhu,%hhu,%hhu)\n", &colorR, &colorG, &colorB, &colorA );
 	m_disabledText.borderColor = GameMakeColor( colorR, colorG, colorB, colorA );
 
-	fscanf( fp, "Hilite Text: (%d,%d,%d,%d)\n", &colorR, &colorG, &colorB, &colorA );
+	fscanf( fp, "Hilite Text: (%hhu,%hhu,%hhu,%hhu)\n", &colorR, &colorG, &colorB, &colorA );
 	m_hiliteText.color = GameMakeColor( colorR, colorG, colorB, colorA );
-	fscanf( fp, "Hilite Text Border: (%d,%d,%d,%d)\n", &colorR, &colorG, &colorB, &colorA );
+	fscanf( fp, "Hilite Text Border: (%hhu,%hhu,%hhu,%hhu)\n", &colorR, &colorG, &colorB, &colorA );
 	m_hiliteText.borderColor = GameMakeColor( colorR, colorG, colorB, colorA );
 
 	// default font
@@ -2399,7 +2399,7 @@ Bool LayoutScheme::loadScheme( char *filename )
 	c = fgetc( fp );  // the end quite itself
 
 	// read the size and bold data elements
-	fscanf( fp, " Size: %d Bold: %d\n", &size, &bold );
+	fscanf( fp, " Size: %i Bold: %i\n", &size, &bold );
 
 	// set the font
 	m_font = TheFontLibrary->getFont( AsciiString(fontBuffer), size, bold );
@@ -2407,12 +2407,12 @@ Bool LayoutScheme::loadScheme( char *filename )
 	// all the data for all the states
 	Int numStates, state;
 	char imageBuffer[ 128 ];
-	fscanf( fp, "Number of states: %d\n", &numStates );
+	fscanf( fp, "Number of states: %i\n", &numStates );
 	for( Int i = 0; i < numStates; i++ )
 	{
 
 		// read all the data
-		fscanf( fp, "%d: Image: %s Color: (%d,%d,%d,%d) Border: (%d,%d,%d,%d)\n",
+		fscanf( fp, "%d: Image: %s Color: (%hhu,%hhu,%hhu,%hhu) Border: (%hhu,%hhu,%hhu,%hhu)\n",
 						&state, imageBuffer, &colorR, &colorG, &colorB, &colorA,
 						&bColorR, &bColorG, &bColorB, &bColorA );
 
