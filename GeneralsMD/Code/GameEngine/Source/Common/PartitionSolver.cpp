@@ -77,7 +77,6 @@ void PartitionSolver::solve(void)
 	
 	Int minSizeForAllData = 0;
 	Int slotsAllotted = 0;
-
 	size_t i, j;
 
 	// first, determine whether there is an actual solution, or we're going to have to fudge it.
