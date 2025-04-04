@@ -1029,6 +1029,7 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 			// 
 			// TheSuperHackers @tweak helmutbuhler 03/04/2025
 			// More than 20 years later, but finally fixed and reenabled!
+
 			TheInGameUI->message("GUI:CRCMismatch");
 
 			// TheSuperHackers @info helmutbuhler 03/04/2025
