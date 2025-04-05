@@ -1029,7 +1029,6 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 			// 
 			// TheSuperHackers @tweak helmutbuhler 03/04/2025
 			// More than 20 years later, but finally fixed and reenabled!
-
 			TheInGameUI->message("GUI:CRCMismatch");
 
 			// TheSuperHackers @info helmutbuhler 03/04/2025
@@ -1168,7 +1167,7 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 	fread(&maxFPS, sizeof(maxFPS), 1, m_file);
 
 	DEBUG_LOG(("RecorderClass::playbackFile() - original game was mode %d\n", m_originalGameMode));
-
+	
 	// TheSuperHackers @fix helmutbuhler 03/04/2025
 	// In case we restart a replay, we need to clear the command list.
 	// Otherwise a crc message remains and messes up the crc calculation on the restarted replay.
