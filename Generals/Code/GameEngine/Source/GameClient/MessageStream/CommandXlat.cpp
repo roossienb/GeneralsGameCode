@@ -3052,22 +3052,22 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			break;
 		case GameMessage::MSG_META_TOGGLE_FAST_FORWARD_REPLAY:
 		{
-			if (TheGlobalData)
+			if( TheGlobalData )
 			{
-#if !defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)//may be defined in GameCommon.h
+				#if !defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)//may be defined in GameCommon.h
 				if (TheGameLogic->isInReplayGame())
-#endif
+				#endif
 				{
 					TheWritableGlobalData->m_TiVOFastMode = 1 - TheGlobalData->m_TiVOFastMode;
-					TheInGameUI->message(UnicodeString(L"m_TiVOFastMode: %s"),
-						TheGlobalData->m_TiVOFastMode ? L"ON" : L"OFF");
+					TheInGameUI->message( UnicodeString( L"m_TiVOFastMode: %s" ),
+																TheGlobalData->m_TiVOFastMode ? L"ON" : L"OFF" );
 				}
 			}  // end if
 
 			disp = DESTROY_MESSAGE;
 			break;
 
-		}  // end toggle special power delays			
+		}  // end toggle special power delays
 		//-----------------------------------------------------------------------------------------
 		case GameMessage::MSG_META_BEGIN_FORCEMOVE:
 			DEBUG_ASSERTCRASH(!TheInGameUI->isInForceMoveToMode(), ("forceMoveToMode mismatch"));

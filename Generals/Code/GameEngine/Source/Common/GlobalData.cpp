@@ -543,7 +543,7 @@ GlobalData::GlobalData()
 		m_theOriginal = this;
 	m_next = NULL;
 
-	m_TiVOFastMode = FALSE;
+  m_TiVOFastMode = FALSE;
 
 #if defined(RTS_DEBUG) || defined(RTS_INTERNAL)
 	m_wireframe = 0;
