@@ -37,6 +37,7 @@
 #define DEFINE_WEATHER_NAMES
 #define DEFINE_BODYDAMAGETYPE_NAMES
 #define DEFINE_PANNING_NAMES
+#define GENERALS_108_EXE_CRC 0xfcd27c0e
 
 #include "Common/crc.h"
 #include "Common/file.h"
@@ -984,6 +985,12 @@ GlobalData::GlobalData()
 	m_iniCRC = 0;
 	m_exeCRC = 0;
 	
+	// TheSuperHackers @tweak 12/05/2025 Skyaero
+	// To maintain compatibility between the VC6 version and 1.08, we simulate the EXE's CRC value.
+	// This CRC does not align with the latest Steam version (1.09).
+#if (defined(_MSC_VER) && _MSC_VER < 1300)
+	m_exeCRC = GENERALS_108_EXE_CRC;
+#else
 	// lets CRC the executable!  Whee!
 	const Int blockSize = 65536;
 	Char buffer[ _MAX_PATH ];
@@ -1030,6 +1037,7 @@ GlobalData::GlobalData()
 	}
 
 	m_exeCRC = exeCRC.get();
+#endif
 	DEBUG_LOG(("EXE CRC: 0x%8.8X\n", m_exeCRC));
 	
 	m_movementPenaltyDamageState = BODY_REALLYDAMAGED;
