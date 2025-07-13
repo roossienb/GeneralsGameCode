@@ -319,14 +319,11 @@ void OpenContain::addToContain( Object *rider )
 		addOrRemoveObjFromWorld(rider, false);
 	}
 
-	// TheSuperHackers @bugfix Skyaero 10/07/2025
-	// Garrison point might not be initialized yet. This happens after triggering the onContaining event.
-	// The solution is to move redeployOccupants() after the event, but that could cause a mismatch.
-	if (RETAIL_COMPATIBLE_CRC)
-	{
-		// ensure our contents are positions correctly.
-		redeployOccupants();
-	}
+#if RETAIL_COMPATIBLE_CRC
+	// ensure our occupants are positioned correctly.
+	// TheSuperHackers @info Moving this call elsewhere will cause retail mismatch.
+	redeployOccupants();
+#endif
 
 	// trigger an onContaining event for the object that just "ate" something
 	if( getObject()->getContain() )
@@ -334,11 +331,12 @@ void OpenContain::addToContain( Object *rider )
 		getObject()->getContain()->onContaining( rider );
 	}
 
-	if (!RETAIL_COMPATIBLE_CRC)
-	{
-		// ensure our contents are positions correctly.
-		redeployOccupants();
-	}
+	// ensure our occupants are positioned correctly.
+	// TheSuperHackers @fix Skyaero 10/07/2025 Now (re)deploys the occupants after the garrison points
+	// had a chance to initialize with prior call to onContaining(). No user facing bug was observed.
+#if !RETAIL_COMPATIBLE_CRC
+	redeployOccupants();
+#endif
 
 	// trigger an onContainedBy event for the object that just got "eaten" by us
 	rider->onContainedBy( getObject() );
