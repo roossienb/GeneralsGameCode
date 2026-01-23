@@ -222,7 +222,7 @@ protected:
 	static PathfindCellInfo *s_infoArray;
 	static PathfindCellInfo *s_firstFree;							///<
 
-
+	// for closed list only
 	PathfindCellInfo *m_nextOpen, *m_prevOpen;						///< for A* "open" list, shared by closed list
 
 	PathfindCellInfo *m_pathParent;												///< "parent" cell from pathfinder
@@ -247,6 +247,39 @@ protected:
 	UnsignedInt m_open:1;													///< place for marking this cell as on the open list
 	UnsignedInt m_closed:1;												///< place for marking this cell as on the closed list
 };
+
+// This represents a min-heap for pathfinding cells based on their total cost.
+// Used for the open list in A* pathfinding.
+class PathfindHeap
+{
+private:
+	PathfindCell** m_heap;
+	Int m_size;
+	Int m_capacity;
+	UnsignedInt m_insertionCounter;
+
+	void heapifyUp(Int index);
+	void heapifyDown(Int index);
+	void swap(Int i, Int j);
+
+public:
+	PathfindHeap(Int capacity);
+	~PathfindHeap();
+
+	void insert(PathfindCell* cell);
+	void remove(PathfindCell* cell);
+	PathfindCell* extractMin();
+	void decreaseKey(PathfindCell* cell);
+	Bool isEmpty() const { return m_size == 0; }
+	Int getSize() const { return m_size; }
+	PathfindCell* at(Int index) const
+	{
+		DEBUG_ASSERTCRASH(index >= 0 && index < m_size, ("Invalid heap index"));
+		return m_heap[index];
+	}
+	void clear();
+};
+
 
 /**
  * This represents one cell in the pathfinding grid.
@@ -309,10 +342,10 @@ public:
 	UnsignedInt costSoFar( PathfindCell *parent );
 
 	/// put self on "open" list in ascending cost order, return new list
-	PathfindCell *putOnSortedOpenList( PathfindCell *list );
+	void putOnSortedOpenList( PathfindHeap *openHeap );
 
 	/// remove self from "open" list
-	PathfindCell *removeFromOpenList( PathfindCell *list );
+	void removeFromOpenList(PathfindHeap* openHeap);
 
 	/// put self on "closed" list, return new list
 	PathfindCell *putOnClosedList( PathfindCell *list );
@@ -323,9 +356,6 @@ public:
 	/// remove all cells from closed list.
 	static Int releaseClosedList( PathfindCell *list );
 
-	/// remove all cells from closed list.
-	static Int releaseOpenList( PathfindCell *list );
-
 	inline PathfindCell *getNextOpen(void) {return m_info->m_nextOpen?m_info->m_nextOpen->m_cell: nullptr;}
 
 	inline UnsignedShort getXIndex(void) const {return m_info->m_pos.x;}
@@ -334,6 +364,7 @@ public:
 	inline Bool isBlockedByAlly(void) const;
 	inline void setBlockedByAlly(Bool blocked);
 
+  inline void setOpen(Bool value) { if (m_info) m_info->m_open = value; }
 	inline Bool getOpen(void) const {return m_info->m_open;}
 	inline Bool getClosed(void) const {return m_info->m_closed;}
 	inline UnsignedInt getCostSoFar(void) const {return m_info->m_costSoFar;}
@@ -370,6 +401,11 @@ public:
 
 	void setConnectLayer( PathfindLayerEnum layer ) { m_connectsToLayer = layer; }	///< set the cell layer	connect id
 	PathfindLayerEnum getConnectLayer( void ) const { return (PathfindLayerEnum)m_connectsToLayer; }				///< get the cell layer connect id
+
+	Int m_heapIndex;
+	UnsignedInt m_insertionOrder;
+	void setInsertionOrder(UnsignedInt order) { m_insertionOrder = order; }
+	UnsignedInt getInsertionOrder() const { return m_insertionOrder; }
 
 private:
 	PathfindCellInfo *m_info;
@@ -856,8 +892,8 @@ private:
 	IRegion2D m_extent;														///< Grid extent limits
 	IRegion2D m_logicalExtent;										///< Logical grid extent limits
 
-	PathfindCell *m_openList;											///< Cells ready to be explored
 	PathfindCell *m_closedList;										///< Cells already explored
+  PathfindHeap* m_openHeap;											///< Heap for open list
 
 	Bool m_isMapReady;														///< True if all cells of map have been classified
 	Bool m_isTunneling;														///< True if path started in an obstacle

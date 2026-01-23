@@ -68,6 +68,72 @@
 
 //-------------------------------------------------------------------------------------------------
 
+#include <fstream>
+
+// TheSuperHackers @feature AI Assistant 22/01/2026 Add path result logging to central log file
+
+// Helper function to log path result to file
+static void logPathResult(Path* path, const char* context)
+{
+	static std::ofstream logFile("_pathfind.log", std::ios::app);
+
+	if (!logFile.is_open())
+		return;
+
+	logFile << "Path: ";
+
+	if (!path)
+	{
+		logFile << "  (no path found)" << std::endl;
+		logFile.flush();
+		return;
+	}
+
+	Int nodeCount = 0;
+	PathNode* node = path->getFirstNode();
+
+	while (node)
+	{
+		const Coord3D* pos = node->getPosition();
+
+		// Convert world coordinates to cell coordinates
+		Int cellX = REAL_TO_INT_FLOOR(pos->x / PATHFIND_CELL_SIZE_F);
+		Int cellY = REAL_TO_INT_FLOOR(pos->y / PATHFIND_CELL_SIZE_F);
+
+		logFile << "[x=" << cellX << ", y=" << cellY << ", l=" << node->getLayer() << "], ";
+
+		node = node->getNext();
+		nodeCount++;
+
+		// Prevent excessive logging
+		if (nodeCount > 200)
+		{
+			logFile << "  ... (truncated, count exceeded 200)";
+			break;
+		}
+	}
+
+	logFile << "(count=" << nodeCount << ")" << std::endl;
+	logFile.flush();
+}
+
+// Helper function to log open heap to file
+static void logOpenHeap(PathfindHeap* openHeap, const char* context)
+{
+	static std::ofstream logFile("_pathfind.log", std::ios::app);
+
+	if (!logFile.is_open())
+		return;
+
+	// Log first heap contents without modifying it
+	PathfindCell* cell = openHeap->at(0);
+	if (cell && cell->hasInfo())
+		logFile << " [x=" << cell->getXIndex() << ", y="	<< cell->getYIndex() << ", tc="	<< cell->getTotalCost() << "]";
+
+	logFile << "(size: " << openHeap->getSize() << ")" << std::endl;
+	logFile.flush();
+}
+
 
 static inline Bool IS_IMPASSABLE(PathfindCell::CellType type) {
 	// Return true if cell is impassable to ground units. jba. [8/18/2003]
@@ -1121,7 +1187,6 @@ void PathfindCellInfo::forceCleanPathFindCellInfos()
 void Pathfinder::forceCleanCells()
 {
 	PathfindCellInfo::forceCleanPathFindCellInfos();
-	m_openList = nullptr;
 	m_closedList = nullptr;
 
 	for (int j = 0; j <= m_extent.hi.y; ++j) {
@@ -1221,6 +1286,193 @@ void PathfindCellInfo::releaseACellInfo(PathfindCellInfo *theInfo)
 	theInfo->m_pathParent = s_firstFree;
 	s_firstFree = theInfo;
 	s_firstFree->m_isFree = true;
+}
+
+//-----------------------------------------------------------------------------------
+
+// TheSuperHackers @performance skyaero 10/01/2026 Binary heap implementation for O(log n) pathfinding
+PathfindHeap::PathfindHeap(Int capacity)
+	: m_size(0)
+	, m_capacity(capacity)
+  , m_insertionCounter(0)
+{
+	m_heap = MSGNEW("PathfindHeap") PathfindCell * [capacity];
+}
+
+PathfindHeap::~PathfindHeap()
+{
+	delete[] m_heap;
+	m_heap = NULL;
+}
+
+void PathfindHeap::swap(Int i, Int j)
+{
+	PathfindCell* temp = m_heap[i];
+	m_heap[i] = m_heap[j];
+	m_heap[j] = temp;
+
+	// Update heap indices in cells
+	m_heap[i]->m_heapIndex = i;
+	m_heap[j]->m_heapIndex = j;
+}
+
+void PathfindHeap::heapifyUp(Int index)
+{
+	while (index > 0)
+	{
+		Int parent = (index - 1) / 2;
+
+		PathfindCell* current = m_heap[index];
+		PathfindCell* parentCell = m_heap[parent];
+
+		// Compare: lower cost OR (same cost AND earlier insertion) should bubble up
+		Bool shouldSwap = current->getTotalCost() < parentCell->getTotalCost() ||
+			(current->getTotalCost() == parentCell->getTotalCost() &&
+				current->getInsertionOrder() < parentCell->getInsertionOrder());
+
+		if (!shouldSwap)
+			break;
+
+		swap(index, parent);
+		index = parent;
+	}
+}
+
+void PathfindHeap::heapifyDown(Int index)
+{
+	while (true)
+	{
+		Int smallest = index;
+		Int left = 2 * index + 1;
+		Int right = 2 * index + 2;
+
+		if (left < m_size)
+		{
+			PathfindCell* smallestCell = m_heap[smallest];
+			PathfindCell* leftCell = m_heap[left];
+
+			Bool leftIsSmaller = leftCell->getTotalCost() < smallestCell->getTotalCost() ||
+				(leftCell->getTotalCost() == smallestCell->getTotalCost() &&
+					leftCell->getInsertionOrder() < smallestCell->getInsertionOrder());
+
+			if (leftIsSmaller)
+				smallest = left;
+		}
+
+		if (right < m_size)
+		{
+			PathfindCell* smallestCell = m_heap[smallest];
+			PathfindCell* rightCell = m_heap[right];
+
+			Bool rightIsSmaller = rightCell->getTotalCost() < smallestCell->getTotalCost() ||
+				(rightCell->getTotalCost() == smallestCell->getTotalCost() &&
+					rightCell->getInsertionOrder() < smallestCell->getInsertionOrder());
+
+			if (rightIsSmaller)
+				smallest = right;
+		}
+
+		if (smallest == index)
+			break;
+
+		swap(index, smallest);
+		index = smallest;
+	}
+}
+
+void PathfindHeap::insert(PathfindCell* cell)
+{
+	DEBUG_ASSERTCRASH(m_size < m_capacity, ("PathfindHeap overflow"));
+	if (m_size >= m_capacity)
+		return;
+
+	cell->setInsertionOrder(m_insertionCounter++);  // Assign insertion order
+	m_heap[m_size] = cell;
+	cell->m_heapIndex = m_size;
+	heapifyUp(m_size);
+	m_size++;
+}
+
+void PathfindHeap::remove(PathfindCell* cell)
+{
+	DEBUG_ASSERTCRASH(cell->m_heapIndex >= 0 && cell->m_heapIndex < m_size,
+		("Invalid heap index for removal"));
+
+	if (cell->m_heapIndex < 0 || cell->m_heapIndex >= m_size)
+		return;
+
+	Int index = cell->m_heapIndex;
+
+	// Replace with last element
+	m_size--;
+
+	if (index == m_size)
+	{
+		// Removing the last element, just mark as removed
+		cell->m_heapIndex = -1;
+		cell->setOpen(false);
+		return;
+	}
+
+	// Move last element to this position
+	m_heap[index] = m_heap[m_size];
+	m_heap[index]->m_heapIndex = index;
+
+	// Mark removed cell
+	cell->m_heapIndex = -1;
+	cell->setOpen(false);
+
+	// Restore heap property - need to check both up and down
+	// First try heapifying up
+	Int parent = (index - 1) / 2;
+	if (index > 0 && m_heap[index]->getTotalCost() < m_heap[parent]->getTotalCost())
+	{
+		heapifyUp(index);
+	}
+	else
+	{
+		// Otherwise heapify down
+		heapifyDown(index);
+	}
+}
+
+PathfindCell* PathfindHeap::extractMin()
+{
+	DEBUG_ASSERTCRASH(m_size > 0, ("PathfindHeap underflow"));
+	if (m_size == 0)
+		return NULL;
+
+	PathfindCell* min = m_heap[0];
+	m_size--;
+
+	if (m_size > 0)
+	{
+		m_heap[0] = m_heap[m_size];
+		m_heap[0]->m_heapIndex = 0;
+		heapifyDown(0);
+	}
+
+	min->m_heapIndex = -1; // Mark as not in heap
+	min->setOpen(false);
+	return min;
+}
+
+void PathfindHeap::decreaseKey(PathfindCell* cell)
+{
+	DEBUG_ASSERTCRASH(cell->m_heapIndex >= 0 && cell->m_heapIndex < m_size,
+		("Invalid heap index"));
+
+	cell->setInsertionOrder(m_insertionCounter++);  // Update insertion order on cost change
+
+	// After decreasing the key (cost), bubble up to restore heap property
+	heapifyUp(cell->m_heapIndex);
+  logOpenHeap(this, "");
+}
+
+void PathfindHeap::clear()
+{
+	m_size = 0;
+	m_insertionCounter = 0;
 }
 
 //-----------------------------------------------------------------------------------
@@ -1671,122 +1923,22 @@ Bool PathfindCell::removeObstacle( Object *obstacle )
 }
 
 /// put self on "open" list in ascending cost order, return new list
-PathfindCell *PathfindCell::putOnSortedOpenList( PathfindCell *list )
+void PathfindCell::putOnSortedOpenList( PathfindHeap *openHeap )
 {
-	DEBUG_ASSERTCRASH(m_info, ("Has to have info."));
-	DEBUG_ASSERTCRASH(m_info->m_closed==FALSE && m_info->m_open==FALSE, ("Serious error - Invalid flags. jba"));
-	if (list == nullptr)
-	{
-		list = this;
-		m_info->m_prevOpen = nullptr;
-		m_info->m_nextOpen = nullptr;
-	}
-	else
-	{
-		// insertion sort
-		PathfindCell *c, *lastCell = nullptr;
-#if RETAIL_COMPATIBLE_PATHFINDING
-		// TheSuperHackers @bugfix In the retail compatible pathfinding, on rare occasions, we get stuck in an infinite loop
-		// External code should pickup on the bad behaviour and cleanup properly, but we need to explicitly break out here
-		// The fixed pathfinding does not have this issue due to the proper cleanup of pathfindCells and their pathfindCellInfos
-		UnsignedInt cellCount = 0;
-		for (c = list; c && cellCount < PATHFIND_CELLS_PER_FRAME; c = c->getNextOpen())
-		{
-			cellCount++;
-#else
-		for (c = list; c; c = c->getNextOpen())
-		{
-#endif
-			if (c->m_info->m_totalCost > m_info->m_totalCost)
-				break;
-
-			lastCell = c;
-		}
-
-		if (c)
-		{
-			// insert just before "c"
-			if (c->m_info->m_prevOpen)
-				c->m_info->m_prevOpen->m_nextOpen = this->m_info;
-			else
-				list = this;
-
-			m_info->m_prevOpen = c->m_info->m_prevOpen;
-			c->m_info->m_prevOpen = this->m_info;
-
-			m_info->m_nextOpen = c->m_info;
-
-		}
-		else
-		{
-			// append after "lastCell" - end of list
-			lastCell->m_info->m_nextOpen = this->m_info;
-			m_info->m_prevOpen = lastCell->m_info;
-			m_info->m_nextOpen = nullptr;
-		}
-	}
-
-	// mark newCell as being on open list
+	openHeap->insert(this);
 	m_info->m_open = true;
 	m_info->m_closed = false;
-
-	return list;
+	// Logging - show open list
+	logOpenHeap(openHeap, "putOnSortedOpenList");
 }
 
 /// remove self from "open" list
-PathfindCell *PathfindCell::removeFromOpenList( PathfindCell *list )
+void PathfindCell::removeFromOpenList(PathfindHeap *openHeap)
 {
-	DEBUG_ASSERTCRASH(m_info, ("Has to have info."));
-	DEBUG_ASSERTCRASH(m_info->m_closed==FALSE && m_info->m_open==TRUE, ("Serious error - Invalid flags. jba"));
-	if (m_info->m_nextOpen)
-		m_info->m_nextOpen->m_prevOpen = m_info->m_prevOpen;
-
-	if (m_info->m_prevOpen)
-		m_info->m_prevOpen->m_nextOpen = m_info->m_nextOpen;
-	else
-		list = getNextOpen();
+	openHeap->remove(this);
 
 	m_info->m_open = false;
-	m_info->m_nextOpen = nullptr;
-	m_info->m_prevOpen = nullptr;
-
-	return list;
-}
-
-/// remove all cells from "open" list
-Int PathfindCell::releaseOpenList( PathfindCell *list )
-{
-	Int count = 0;
-	while (list) {
-		count++;
-		DEBUG_ASSERTCRASH(list->m_info, ("Has to have info."));
-		DEBUG_ASSERTCRASH(list->m_info->m_closed==FALSE && list->m_info->m_open==TRUE, ("Serious error - Invalid flags. jba"));
-		PathfindCell *cur = list;
-		PathfindCellInfo *curInfo = list->m_info;
-
-#if RETAIL_COMPATIBLE_PATHFINDING
-		// TheSuperHackers @info This is only here to catch a crash point in the retail compatible pathfinding
-		// One crash mode is where a cell has no PathfindCellInfo, resulting in a nullptr access and a crash.
-		// Therefore we signal that we need to clean the maps cells and the PathfindCellInfos
-		if(!curInfo && !s_useFixedPathfinding) {
-			s_useFixedPathfinding = true;
-			s_forceCleanCells = true;
-			return count;
-		}
-#endif
-
-		if (curInfo->m_nextOpen) {
-			list = curInfo->m_nextOpen->m_cell;
-		} else {
-			list = nullptr;
-		}
-		DEBUG_ASSERTCRASH(cur == curInfo->m_cell, ("Bad backpointer in PathfindCellInfo"));
-		curInfo->m_nextOpen = nullptr;
-		curInfo->m_prevOpen = nullptr;
-		curInfo->m_open = FALSE;
-		cur->releaseInfo();
-	}
-	return count;
+	m_heapIndex = -1;
 }
 
 /// remove all cells from "closed" list
@@ -3850,6 +4002,7 @@ Pathfinder::Pathfinder( void ) :m_map(nullptr)
 Pathfinder::~Pathfinder( void )
 {
 	PathfindCellInfo::releaseCellInfos();
+	delete m_openHeap;
 }
 
 void Pathfinder::reset( void )
@@ -3871,7 +4024,8 @@ void Pathfinder::reset( void )
 	// reset the pathfind grid
 	m_extent.lo.x=m_extent.lo.y=m_extent.hi.x=m_extent.hi.y=0;
 	m_logicalExtent.lo.x=m_logicalExtent.lo.y=m_logicalExtent.hi.x=m_logicalExtent.hi.y=0;
-	m_openList = nullptr;
+	delete m_openHeap;
+	m_openHeap = new PathfindHeap(PATHFIND_CELLS_PER_FRAME);
 	m_closedList = nullptr;
 
 	m_ignoreObstacleID = INVALID_ID;
@@ -4618,8 +4772,10 @@ void Pathfinder::debugShowSearch(  Bool pathFound  )
 		addIcon(nullptr, 0, 0, color);	 // erase.
 	}
 
-	for( s = m_openList; s; s=s->getNextOpen() )
+	for (Int i = 0; i < m_openHeap->getSize(); i++)
 	{
+		s = m_openHeap->at(i);
+
 		// create objects to show path - they decay
 		RGBColor color;
 		color.red = color.green = 0;
@@ -4721,10 +4877,17 @@ Bool Pathfinder::validMovementTerrain( PathfindLayerEnum layer, const Locomotor*
 // Releases the cells on the open & closed lists.
 //
 void Pathfinder::cleanOpenAndClosedLists(void) {
+	// TODO: can probably be more efficient.
 	Int count = 0;
-	if (m_openList) {
-		count += PathfindCell::releaseOpenList(m_openList);
-		m_openList = nullptr;
+	if (m_openHeap) {
+		while (!m_openHeap->isEmpty()) {
+			PathfindCell* cell = m_openHeap->extractMin();
+			if (cell && cell->hasInfo()) {
+				cell->setOpen(false);
+				cell->m_heapIndex = -1;
+				count++;
+			}
+		}
 	}
 
 #if RETAIL_COMPATIBLE_PATHFINDING
@@ -5862,7 +6025,7 @@ void Pathfinder::checkChangeLayers(PathfindCell *parentCell)
 	newCell->setCostSoFar(parentCell->getCostSoFar()); // same as parent cost
 	newCell->setTotalCost(parentCell->getTotalCost());
 	// insert newCell in open list such that open list is sorted, smallest total path cost first
-	m_openList = newCell->putOnSortedOpenList( m_openList );
+	newCell->putOnSortedOpenList( m_openHeap );
 }
 
 bool Pathfinder::checkCellOutsideExtents(ICoord2D& cell) {
@@ -5963,12 +6126,11 @@ struct ExamineCellsStruct
 			if (to->getClosed())
 				d->thePathfinder->m_closedList = to->removeFromClosedList( d->thePathfinder->m_closedList );
 
-			// if the to was already on the open list, remove it so it can be re-inserted in order
 			if (to->getOpen())
-				d->thePathfinder->m_openList = to->removeFromOpenList( d->thePathfinder->m_openList );
-
-			// insert to in open list such that open list is sorted, smallest total path cost first
-			d->thePathfinder->m_openList = to->putOnSortedOpenList( d->thePathfinder->m_openList );
+				d->thePathfinder->m_openHeap->decreaseKey(to);
+			else
+				// insert to in open list such that open list is sorted, smallest total path cost first
+				 to->putOnSortedOpenList(d->thePathfinder->m_openHeap);
 	}
 
 	return 0;	// keep going
@@ -6199,10 +6361,10 @@ Int Pathfinder::examineNeighboringCells(PathfindCell *parentCell, PathfindCell *
 
 			// if the newCell was already on the open list, remove it so it can be re-inserted in order
 			if (newCell->getOpen())
-				m_openList = newCell->removeFromOpenList( m_openList );
-
-			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = newCell->putOnSortedOpenList( m_openList );
+				m_openHeap->decreaseKey(newCell);
+			else
+				// insert newCell in open list such that open list is sorted, smallest total path cost first
+				newCell->putOnSortedOpenList(m_openHeap);
 		}
 	return cellCount;
 }
@@ -6232,6 +6394,7 @@ Path *Pathfinder::findPath( Object *obj, const LocomotorSet& locomotorSet, const
 	}
 
 	Path *pat = internalFindPath(obj, locomotorSet, from, rawTo);
+	logPathResult(pat, "findPath");
 	if (pat!=nullptr) {
 		return pat;
 	}
@@ -6268,7 +6431,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 		DEBUG_LOG(("Attempting pathfind to 0,0, generally a bug."));
 		return nullptr;
 	}
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	if (m_isMapReady == false) {
 		return nullptr;
 	}
@@ -6378,9 +6541,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	}
 
 	parentCell->startPathfind(goalCell);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap);
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -6391,11 +6552,9 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	// Continue search until "open" list is empty, or
 	// until goal is found.
 	//
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
-		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		if (parentCell == goalCell)
 		{
@@ -6800,7 +6959,7 @@ struct GroundCellsStruct
 			to->setTotalCost(to->getCostSoFar() + costRemaining) ;
 
 			// insert to in open list such that open list is sorted, smallest total path cost first
-			d->thePathfinder->m_openList = to->putOnSortedOpenList( d->thePathfinder->m_openList );
+			to->putOnSortedOpenList(d->thePathfinder->m_openHeap);
 	}
 
 	return 0;	// keep going
@@ -6836,7 +6995,7 @@ Path *Pathfinder::findGroundPath( const Coord3D *from,
 		DEBUG_LOG(("Attempting pathfind to 0,0, generally a bug."));
 		return nullptr;
 	}
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	if (m_isMapReady == false) {
 		return nullptr;
 	}
@@ -6927,9 +7086,7 @@ Path *Pathfinder::findGroundPath( const Coord3D *from,
 		return nullptr;
 	}
 	parentCell->startPathfind(goalCell);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap);
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -6944,11 +7101,10 @@ Path *Pathfinder::findGroundPath( const Coord3D *from,
 	// until goal is found.
 	//
 	Int cellCount = 0;
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		if (parentCell == goalCell)
 		{
@@ -7120,10 +7276,10 @@ Path *Pathfinder::findGroundPath( const Coord3D *from,
 
 			// if the newCell was already on the open list, remove it so it can be re-inserted in order
 			if (newCell->getOpen())
-				m_openList = newCell->removeFromOpenList( m_openList );
-
-			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = newCell->putOnSortedOpenList( m_openList );
+				m_openHeap->decreaseKey(newCell);
+			else
+				// insert newCell in open list such that open list is sorted, smallest total path cost first
+				newCell->putOnSortedOpenList(m_openHeap);
 		}
 	}
 	// failure - goal cannot be reached
@@ -7280,7 +7436,7 @@ void Pathfinder::processHierarchicalCell( const ICoord2D &scanCell, const ICoord
 			adjNewCell->setTotalCost(adjNewCell->getCostSoFar()+remCost);
 			adjNewCell->setParentCellHierarchical(parentCell);
 			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = adjNewCell->putOnSortedOpenList( m_openList );
+			adjNewCell->putOnSortedOpenList(m_openHeap);
 		}
 
 	}
@@ -7326,7 +7482,7 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 		DEBUG_LOG(("Attempting pathfind to 0,0, generally a bug."));
 		return nullptr;
 	}
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	if (m_isMapReady == false) {
 		return nullptr;
 	}
@@ -7401,8 +7557,8 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 		goalBlockNdx.y = -1;
 	}
 
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	// TODO: in retail, call logger here as well
+	parentCell->putOnSortedOpenList(m_openHeap); // SHOULD IT THOUGH?
 
 	if (parentCell->getLayer()!=LAYER_GROUND) {
 		PathfindLayerEnum layer = parentCell->getLayer();
@@ -7415,7 +7571,7 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 		PathfindCell *startCell = getCell(LAYER_GROUND, ndx.x, ndx.y);
 		if (cell && startCell) {
 			// Close parent cell;
-			m_openList = parentCell->removeFromOpenList(m_openList);
+			parentCell->removeFromOpenList(m_openHeap);
 			m_closedList = parentCell->putOnClosedList(m_closedList);
 			if (!startCell->allocateInfo(ndx)) {
 				// TheSuperHackers @info We need to forcefully cleanup dangling pathfinding cells if this failure condition is hit in retail
@@ -7441,7 +7597,7 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 			startCell->setTotalCost(remCost);
 			startCell->setParentCellHierarchical(parentCell);
 			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = startCell->putOnSortedOpenList( m_openList );
+			startCell->putOnSortedOpenList(m_openHeap);
 
 			cellCount++;
 			if(!cell->allocateInfo(toNdx)) {
@@ -7466,7 +7622,7 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 			cell->setTotalCost(remCost);
 			cell->setParentCellHierarchical(parentCell);
 			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = cell->putOnSortedOpenList( m_openList );
+			cell->putOnSortedOpenList(m_openHeap);
 		}
 	}
 
@@ -7477,11 +7633,10 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 	// Continue search until "open" list is empty, or
 	// until goal is found.
 	//
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		zoneStorageType parentZone;
 		if (parentCell->getLayer()==LAYER_GROUND) {
@@ -7594,7 +7749,7 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 					cell->setTotalCost(cell->getCostSoFar()+remCost);
 					cell->setParentCellHierarchical(startCell);
 					// insert newCell in open list such that open list is sorted, smallest total path cost first
-					m_openList = cell->putOnSortedOpenList( m_openList );
+					cell->putOnSortedOpenList(m_openHeap);
 
 				}
 			}
@@ -8096,7 +8251,7 @@ Bool Pathfinder::pathDestination( 	Object *obj, const LocomotorSet& locomotorSet
 
 	Coord3D adjustTo = *groupDest;
 	Coord3D *to = &adjustTo;
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	// create unique "mark" values for open and closed cells for this pathfind invocation
 
 	Bool isCrusher = obj ? obj->getCrusherLevel() > 0 : false;
@@ -8157,9 +8312,7 @@ Bool Pathfinder::pathDestination( 	Object *obj, const LocomotorSet& locomotorSet
 	}
 
 	parentCell->startPathfind(goalCell);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -8168,11 +8321,10 @@ Bool Pathfinder::pathDestination( 	Object *obj, const LocomotorSet& locomotorSet
 	// Continue search until "open" list is empty, or
 	// until goal is found.
 	//
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		Coord3D pos;
 		// put parent cell onto closed list - its evaluation is finished
@@ -8297,10 +8449,10 @@ Bool Pathfinder::pathDestination( 	Object *obj, const LocomotorSet& locomotorSet
 
 			// if the newCell was already on the open list, remove it so it can be re-inserted in order
 			if (newCell->getOpen())
-				m_openList = newCell->removeFromOpenList( m_openList );
-
-			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = newCell->putOnSortedOpenList( m_openList );
+				m_openHeap->decreaseKey(newCell);
+			else
+				// insert newCell in open list such that open list is sorted, smallest total path cost first
+				newCell->putOnSortedOpenList(m_openHeap);
 		}
 	}
 
@@ -8390,7 +8542,7 @@ Int Pathfinder::checkPathCost(Object *obj, const LocomotorSet& locomotorSet, con
 
 	Coord3D adjustTo = *rawTo;
 	Coord3D *to = &adjustTo;
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	// create unique "mark" values for open and closed cells for this pathfind invocation
 
 	Bool isCrusher = obj ? obj->getCrusherLevel() > 0 : false;
@@ -8433,9 +8585,7 @@ Int Pathfinder::checkPathCost(Object *obj, const LocomotorSet& locomotorSet, con
 	}
 
 	parentCell->startPathfind(goalCell);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -8444,11 +8594,10 @@ Int Pathfinder::checkPathCost(Object *obj, const LocomotorSet& locomotorSet, con
 	// Continue search until "open" list is empty, or
 	// until goal is found.
 	//
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		// put parent cell onto closed list - its evaluation is finished - Retail compatible behaviour
 #if RETAIL_COMPATIBLE_PATHFINDING
@@ -8582,12 +8731,13 @@ Int Pathfinder::checkPathCost(Object *obj, const LocomotorSet& locomotorSet, con
 
 			// if the newCell was already on the open list, remove it so it can be re-inserted in order
 			if (newCell->getOpen())
-				m_openList = newCell->removeFromOpenList( m_openList );
+				newCell->removeFromOpenList(m_openHeap);
 
 #if RETAIL_COMPATIBLE_PATHFINDING
 			// TheSuperHacker @info This is here to catch a retail pathfinding crash point and to recover from it
 			// A cell has gotten onto the open list without pathfinding info due to a danling m_open pointer on the previous listed cell so we need to force a cleanup
-			if (!s_useFixedPathfinding && m_openList && !m_openList->hasInfo()) {
+			PathfindCell* cell = m_openHeap->extractMin();
+			if (!s_useFixedPathfinding && cell && !cell->hasInfo()) {
 				s_useFixedPathfinding = true;
 				forceCleanCells();
 				return MAX_COST;
@@ -8595,7 +8745,7 @@ Int Pathfinder::checkPathCost(Object *obj, const LocomotorSet& locomotorSet, con
 #endif
 
 			// insert newCell in open list such that open list is sorted, smallest total path cost first
-			m_openList = newCell->putOnSortedOpenList( m_openList );
+			newCell->putOnSortedOpenList(m_openHeap);
 		}
 	}
 
@@ -8659,7 +8809,7 @@ Path *Pathfinder::findClosestPath( Object *obj, const LocomotorSet& locomotorSet
 		adjustTo.x += PATHFIND_CELL_SIZE_F/2;
 		adjustTo.y += PATHFIND_CELL_SIZE_F/2;
 	}
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	// create unique "mark" values for open and closed cells for this pathfind invocation
 
 	Bool isCrusher = obj ? obj->getCrusherLevel() > 0 : false;
@@ -8758,13 +8908,11 @@ Path *Pathfinder::findClosestPath( Object *obj, const LocomotorSet& locomotorSet
 		}
 	}
 	parentCell->startPathfind(goalCell);
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	PathfindCell *closesetCell = nullptr;
 	Real closestDistanceSqr = FLT_MAX;
 	Real closestDistScreenSqr = FLT_MAX;
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -8774,14 +8922,13 @@ Path *Pathfinder::findClosestPath( Object *obj, const LocomotorSet& locomotorSet
 	// until goal is found.
 	//
 	Bool foundGoal = false;
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		Real dx;
 		Real dy;
 		Real distSqr;
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		if (parentCell == goalCell)
 		{
@@ -10255,7 +10402,7 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 	Int radius;
 	getRadiusAndCenter(obj, radius, centerInCell);
 
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 
 	// determine start cell
 	ICoord2D startCellNdx;
@@ -10294,9 +10441,7 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 		return nullptr;
 	}
 	parentCell->startPathfind(nullptr);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -10311,11 +10456,10 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 	boxHalfWidth += otherRadius*PATHFIND_CELL_SIZE_F;
 	if (otherCenter) boxHalfWidth+=PATHFIND_CELL_SIZE_F/2;
 
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		Region2D bounds;
 		Coord3D cellCenter;
@@ -10432,7 +10576,7 @@ Path *Pathfinder::patchPath( const Object *obj, const LocomotorSet& locomotorSet
 
 	m_zoneManager.setAllPassable();
 
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 
 	enum {CELL_LIMIT = 2000}; // max cells to examine.
 	Int cellCount = 0;
@@ -10461,9 +10605,7 @@ Path *Pathfinder::patchPath( const Object *obj, const LocomotorSet& locomotorSet
 		return nullptr;
 	}
 	parentCell->startPathfind( nullptr);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -10529,6 +10671,7 @@ Path *Pathfinder::patchPath( const Object *obj, const LocomotorSet& locomotorSet
 		else
 #endif
 		{
+			m_openHeap->remove(parentCell);
 			parentCell->releaseInfo();
 		}
 		return nullptr; // no open nodes.
@@ -10542,16 +10685,16 @@ Path *Pathfinder::patchPath( const Object *obj, const LocomotorSet& locomotorSet
 		if (s_useFixedPathfinding)
 #endif
 		{
+			m_openHeap->remove(parentCell);
 			parentCell->releaseInfo();
 		}
 		return nullptr;
 	}
 
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		Coord3D cellCenter;
 		adjustCoordToCell(parentCell->getXIndex(), parentCell->getYIndex(), centerInCell, cellCenter, parentCell->getLayer());
@@ -10706,7 +10849,7 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 
 	Int cellCount = 0;
 
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 
 	Int attackDistance = weapon->getAttackDistance(obj, victim, victimPos);
 	attackDistance += 3*PATHFIND_CELL_SIZE;
@@ -10747,8 +10890,7 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 		return nullptr;
 	}
 
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -10768,11 +10910,10 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 		checkLOS = true;
 	}
 
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		Coord3D cellCenter;
 		adjustCoordToCell(parentCell->getXIndex(), parentCell->getYIndex(), centerInCell, cellCenter, parentCell->getLayer());
@@ -10998,7 +11139,7 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 		isHuman = false; // computer gets to cheat.
 	}
 
-	DEBUG_ASSERTCRASH(m_openList== nullptr && m_closedList == nullptr, ("Dangling lists."));
+	DEBUG_ASSERTCRASH(m_openHeap->isEmpty() && m_closedList == nullptr, ("Dangling lists."));
 	// create unique "mark" values for open and closed cells for this pathfind invocation
 
 	m_zoneManager.setAllPassable();
@@ -11015,9 +11156,7 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 		return nullptr;
 	}
 	parentCell->startPathfind( nullptr);
-
-	// initialize "open" list to contain start cell
-	m_openList = parentCell;
+	parentCell->putOnSortedOpenList(m_openHeap); // THIS ONE WAS MISSING
 
 	// "closed" list is initially empty
 	m_closedList = nullptr;
@@ -11029,11 +11168,10 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 
 	Real farthestDistanceSqr = 0;
 
-	while( m_openList != nullptr )
+	while(!m_openHeap->isEmpty())
 	{
 		// take head cell off of open list - it has lowest estimated total path cost
-		parentCell = m_openList;
-		m_openList = parentCell->removeFromOpenList(m_openList);
+		parentCell = m_openHeap->extractMin();
 
 		Coord3D cellCenter;
 		adjustCoordToCell(parentCell->getXIndex(), parentCell->getYIndex(), centerInCell, cellCenter, parentCell->getLayer());
@@ -11052,7 +11190,7 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 		if (distSqr>repulsorDistSqr) {
 			ok = true;
 		}
-		if (m_openList == nullptr && cellCount>0) {
+		if (m_openHeap->isEmpty() && cellCount>0) {
 			ok = true; // exhausted the search space, just take the last cell.
 		}
 		if (distSqr > farthestDistanceSqr) {
